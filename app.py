@@ -522,52 +522,50 @@ else:
     st.info("Click **Run AutoML Training** above to start the model competition.")
     # ==========================================
 # MAINTENANCE ASSISTANT CHATBOT (GEMINI API)
-# ==========================================
 import google.generativeai as genai
 
 st.markdown("---")
 st.subheader("🤖 Maintenance Assistant")
-st.caption("Enter your Gemini API key to chat with the AI about your machine's telemetry.")
 
-# 1. Ask for the API key directly in the UI (keeps your code secure for GitHub)
-api_key = st.text_input("Gemini API Key:", type="password")
+# 1. Pull the API key securely from Streamlit Cloud
+if "GEMINI_API_KEY" in st.secrets:
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    
+    # 2. Set the instructions for your bot
+    system_prompt = """
+    You are the AI Assistant for a Predictive Maintenance and Warranty Claim Dashboard. 
+    Answer ONLY questions related to predictive maintenance, machine learning, or this dashboard.
+    Keep your responses short, professional, and use bullet points.
+    """
+    model = genai.GenerativeModel(
+        model_name='gemini-1.5-flash',
+        system_instruction=system_prompt
+    )
 
-if api_key:
-    # 2. Configure the API
-    genai.configure(api_key=api_key)
-    llm_model = genai.GenerativeModel('gemini-1.5-flash')
+    # 3. Setup Chat History so the bot remembers the conversation
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
 
-    # 3. Initialize chat memory so the conversation doesn't erase
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
-
-    # 4. Display previous messages on the screen
-    for message in st.session_state.chat_history:
+    # Display past messages
+    for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # 5. Handle the user's new question
-    if user_prompt := st.chat_input("E.g., What should I do about the high TWF risk?"):
-        
-        # Display the user's question
-        st.chat_message("user").markdown(user_prompt)
-        st.session_state.chat_history.append({"role": "user", "content": user_prompt})
+    # 4. The Chat Input Box
+    if prompt := st.chat_input("E.g., What does a high TWF risk mean?"):
+        # Show user message
+        st.chat_message("user").markdown(prompt)
+        st.session_state.messages.append({"role": "user", "content": prompt})
 
-        # --- CONTEXT INJECTION ---
-        # We tell the AI it is a factory assistant, but we don't force specific prediction variables 
-        # just yet to ensure it doesn't crash if the ML model hasn't finished running.
-        system_context = f"""
-        You are a highly skilled factory maintenance AI. 
-        You are helping an engineer analyze predictive maintenance telemetry on a Streamlit dashboard.
-        Please answer the following user question briefly, professionally, and accurately.
-        User question: {user_prompt}
-        """
-
-        # 6. Call the API and display the response
+        # Get and show bot response
         with st.chat_message("assistant"):
             try:
-                response = llm_model.generate_content(system_context)
+                response = model.generate_content(prompt)
                 st.markdown(response.text)
-                st.session_state.chat_history.append({"role": "assistant", "content": response.text})
+                st.session_state.messages.append({"role": "assistant", "content": response.text})
             except Exception as e:
-                st.error("There was an error connecting to the API. Please verify your API key.")
+                st.error(f"🚨 API Error: {e}")
+
+else:
+    # If the app can't find the key, it shows this warning instead of crashing
+    st.warning("⚠️ Chatbot is offline. API Key is missing from Streamlit Secrets.")
