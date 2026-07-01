@@ -483,7 +483,7 @@ if "results_df" in st.session_state:
 
     # ============================================================
     # SECTION 6 — TOP-K (TOP-2) RISK INFERENCE
-    # ============================================================
+    # ===========================================================
     st.divider()
     st.header("Step 5: Top-2 Risk Predictions")
     st.write(
@@ -520,3 +520,54 @@ if "results_df" in st.session_state:
     )
 else:
     st.info("Click **Run AutoML Training** above to start the model competition.")
+    # ==========================================
+# MAINTENANCE ASSISTANT CHATBOT (GEMINI API)
+# ==========================================
+import google.generativeai as genai
+
+st.markdown("---")
+st.subheader("🤖 Maintenance Assistant")
+st.caption("Enter your Gemini API key to chat with the AI about your machine's telemetry.")
+
+# 1. Ask for the API key directly in the UI (keeps your code secure for GitHub)
+api_key = st.text_input("Gemini API Key:", type="password")
+
+if api_key:
+    # 2. Configure the API
+    genai.configure(api_key=api_key)
+    llm_model = genai.GenerativeModel('gemini-1.5-flash')
+
+    # 3. Initialize chat memory so the conversation doesn't erase
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    # 4. Display previous messages on the screen
+    for message in st.session_state.chat_history:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # 5. Handle the user's new question
+    if user_prompt := st.chat_input("E.g., What should I do about the high TWF risk?"):
+        
+        # Display the user's question
+        st.chat_message("user").markdown(user_prompt)
+        st.session_state.chat_history.append({"role": "user", "content": user_prompt})
+
+        # --- CONTEXT INJECTION ---
+        # We tell the AI it is a factory assistant, but we don't force specific prediction variables 
+        # just yet to ensure it doesn't crash if the ML model hasn't finished running.
+        system_context = f"""
+        You are a highly skilled factory maintenance AI. 
+        You are helping an engineer analyze predictive maintenance telemetry on a Streamlit dashboard.
+        Please answer the following user question briefly, professionally, and accurately.
+        User question: {user_prompt}
+        """
+
+        # 6. Call the API and display the response
+        with st.chat_message("assistant"):
+            try:
+                response = llm_model.generate_content(system_context)
+                st.markdown(response.text)
+                st.session_state.chat_history.append({"role": "assistant", "content": response.text})
+            except Exception as e:
+                st.error("There was an error connecting to the API. Please verify your API key.")
